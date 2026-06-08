@@ -12,7 +12,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# SQLite doesn't need connect_args for PostgreSQL
+# SQLite doesn't need connect   _args for PostgreSQL
 connect_args = {"check_same_thread": False} if DATABASE_URL and DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(DATABASE_URL)

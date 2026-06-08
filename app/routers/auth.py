@@ -101,3 +101,29 @@ def update_interests(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+@router.put("/me/password")
+def change_password(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not verify_password(data["current_password"], current_user.password):
+        raise HTTPException(
+            status_code=400, detail="Current password is incorrect")
+    current_user.password = hash_password(data["new_password"])
+    db.commit()
+    return {"message": "Password changed successfully"}
+
+
+@router.delete("/me")
+def delete_account(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not verify_password(data["password"], current_user.password):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+    db.delete(current_user)
+    db.commit()
+    return {"message": "Account deleted"}
