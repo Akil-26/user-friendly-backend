@@ -79,3 +79,19 @@ SOURCE_NAMES = {
     "nasa": "NASA",
     "indianexpress": "Indian Express",
 }
+
+
+def get_feed_url_for_topic(topic: str) -> list[str]:
+    """
+    Returns RSS feed URLs for any topic.
+    First checks known sources, then falls back to Google News search.
+    """
+    # Check known sources first
+    if topic in INTEREST_FEEDS:
+        return INTEREST_FEEDS[topic]
+
+    # Fallback: Google News RSS search for any custom topic
+    encoded = topic.replace(" ", "+")
+    return [
+        f"https://news.google.com/rss/search?q={encoded}&hl=en-IN&gl=IN&ceid=IN:en"
+    ]

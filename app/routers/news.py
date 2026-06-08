@@ -6,11 +6,10 @@ import asyncio
 from typing import List, Optional
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-
 from ..database import get_db
 from ..models import User
 from ..dependencies import get_current_user
-from ..news_sources import INTEREST_FEEDS, DEFAULT_INTERESTS, SOURCE_NAMES
+from ..news_sources import INTEREST_FEEDS, DEFAULT_INTERESTS, SOURCE_NAMES, get_feed_url_for_topic
 
 router = APIRouter(prefix="/news", tags=["News"])
 
@@ -169,20 +168,41 @@ async def get_feed_by_interest(
     limit: int = Query(default=10, ge=1, le=30),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get news for one specific interest topic.
-    Useful when user taps a category tab in Flutter.
-    """
-    if interest not in INTEREST_FEEDS:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Topic '{interest}' not found. Use GET /news/topics to see available topics."
-        )
+    available_topics = list(INTEREST_FEEDS.keys())
 
-    articles = await fetch_all_feeds([interest], limit_per_feed=limit)
+    # exact match
+    if interest in available_topics:
+        matched_topic = interest
+    else:
+        # fuzzy match for known topics
+        from thefuzz import process
+        best_match = process.extractOne(interest, available_topics, score_cutoff=60)
+        if best_match:
+            matched_topic = best_match[0]
+        else:
+            # custom topic — use Google News search RSS
+            matched_topic = interest
+
+    # get URLs — works for both known and custom topics
+    urls = get_feed_url_for_topic(matched_topic)
+
+    async with httpx.AsyncClient(
+        headers={"User-Agent": "Mozilla/5.0"},
+        follow_redirects=True
+    ) as client:
+        tasks = [fetch_feed(client, matched_topic, url, limit) for url in urls]
+        results = await asyncio.gather(*tasks)
+
+    all_articles = [a for feed in results for a in feed]
+    all_articles.sort(key=lambda x: x["_sort_date"], reverse=True)
+    for a in all_articles:
+        del a["_sort_date"]
+    all_articles = [a for a in all_articles if a["title"] and a["link"]]
 
     return {
-        "interest": interest,
-        "total": len(articles),
-        "articles": articles,
+        "searched": interest,
+        "matched_topic": matched_topic,
+        "suggestions": [],
+        "total": len(all_articles),
+        "articles": all_articles,
     }
