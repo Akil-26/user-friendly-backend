@@ -63,6 +63,9 @@ INTEREST_FEEDS = {
     ],
 }
 
+# All built-in topic keys — used for Feed/Explore page
+BUILTIN_TOPICS = list(INTEREST_FEEDS.keys())
+
 DEFAULT_INTERESTS = ["world", "india"]
 
 # Trusted source display names
@@ -84,15 +87,14 @@ SOURCE_NAMES = {
 def get_feed_url_for_topic(topic: str) -> list:
     """
     Returns RSS URLs for any topic.
-    Known topics → trusted sources.
-    Unknown/custom topics → Google News RSS search.
+    Known topics → trusted multi-source RSS.
+    Custom topics → Google News RSS search.
     """
-    # known trusted sources first
-    if topic in INTEREST_FEEDS:
-        return INTEREST_FEEDS[topic]
-    
-    # any custom tag → Google News search RSS
-    encoded = topic.strip().replace(" ", "+")
+    normalized = topic.strip().lower()
+    if normalized in INTEREST_FEEDS:
+        return INTEREST_FEEDS[normalized]
+    # custom tag → Google News search RSS
+    encoded = normalized.replace(" ", "+")
     return [
         f"https://news.google.com/rss/search?q={encoded}&hl=en-IN&gl=IN&ceid=IN:en"
     ]
