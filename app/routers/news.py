@@ -162,35 +162,26 @@ def get_available_topics():
     }
 
 
-@router.get("/feed/{interest}")
-async def get_feed_by_interest(
-    interest: str,
+@router.get("/feed")
+async def get_feed(
     limit: int = Query(default=10, ge=1, le=30),
     current_user: User = Depends(get_current_user),
 ):
-    available_topics = list(INTEREST_FEEDS.keys())
+    interests = current_user.interests or DEFAULT_INTERESTS
 
-    # exact match
-    if interest in available_topics:
-        matched_topic = interest
-    else:
-        # fuzzy match for known topics
-        from thefuzz import process
-        best_match = process.extractOne(interest, available_topics, score_cutoff=60)
-        if best_match:
-            matched_topic = best_match[0]
-        else:
-            # custom topic — use Google News search RSS
-            matched_topic = interest
-
-    # get URLs — works for both known and custom topics
-    urls = get_feed_url_for_topic(matched_topic)
-
+    # fetch ALL user interests simultaneously — known + custom tags
+    all_articles = []
+    
     async with httpx.AsyncClient(
         headers={"User-Agent": "Mozilla/5.0"},
         follow_redirects=True
     ) as client:
-        tasks = [fetch_feed(client, matched_topic, url, limit) for url in urls]
+        tasks = []
+        for interest in interests:
+            urls = get_feed_url_for_topic(interest)  # works for any tag
+            for url in urls:
+                tasks.append(fetch_feed(client, interest, url, limit))
+        
         results = await asyncio.gather(*tasks)
 
     all_articles = [a for feed in results for a in feed]
@@ -200,9 +191,8 @@ async def get_feed_by_interest(
     all_articles = [a for a in all_articles if a["title"] and a["link"]]
 
     return {
-        "searched": interest,
-        "matched_topic": matched_topic,
-        "suggestions": [],
+        "user": current_user.name,
+        "interests": interests,
         "total": len(all_articles),
         "articles": all_articles,
     }

@@ -81,17 +81,18 @@ SOURCE_NAMES = {
 }
 
 
-def get_feed_url_for_topic(topic: str) -> list[str]:
+def get_feed_url_for_topic(topic: str) -> list:
     """
-    Returns RSS feed URLs for any topic.
-    First checks known sources, then falls back to Google News search.
+    Returns RSS URLs for any topic.
+    Known topics → trusted sources.
+    Unknown/custom topics → Google News RSS search.
     """
-    # Check known sources first
+    # known trusted sources first
     if topic in INTEREST_FEEDS:
         return INTEREST_FEEDS[topic]
-
-    # Fallback: Google News RSS search for any custom topic
-    encoded = topic.replace(" ", "+")
+    
+    # any custom tag → Google News search RSS
+    encoded = topic.strip().replace(" ", "+")
     return [
         f"https://news.google.com/rss/search?q={encoded}&hl=en-IN&gl=IN&ceid=IN:en"
     ]
