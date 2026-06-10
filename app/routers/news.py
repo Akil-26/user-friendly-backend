@@ -210,5 +210,5 @@ def get_available_topics(
     return {
         "builtin": BUILTIN_TOPICS,
         "custom": user_custom,
-        "all": BUILTIN_TOPICS + user_custom,
+        "all":  user_custom + BUILTIN_TOPICS ,
     }
