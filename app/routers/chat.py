@@ -19,42 +19,51 @@ async def embed_article(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Called when user taps YES on the popup.
-    Scrapes article → chunks → embeds → stores in DB.
-    """
-    # check if already embedded for this user
+    # check already embedded
     existing = db.query(ArticleChunk).filter(
         ArticleChunk.article_url == data.article_url,
         ArticleChunk.user_id == current_user.id
     ).first()
 
     if existing:
-        # already done — just return session
         session = db.query(ChatSession).filter(
             ChatSession.article_url == data.article_url,
             ChatSession.user_id == current_user.id
         ).first()
         return EmbedResponse(
-            session_id=session.id,
+            session_id=session.id if session else 0,
             article_title=data.article_title,
             chunks_stored=0,
-            message="Already embedded, ready to chat!"
+            message="Already embedded, ready to chat!",
+            can_embed=True,
         )
 
-    # 1. scrape
+    # scrape
     try:
         title, full_text = scrape_article(data.article_url)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "scrape_failed",
+                "message": "This article requires login or is behind a paywall.",
+                "can_embed": False,
+            }
+        )
 
-    if not full_text or len(full_text) < 100:
-        raise HTTPException(status_code=400, detail="Could not extract enough text from this article.")
+    # check if we got enough content
+    if not full_text or len(full_text.split()) < 50:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "insufficient_content",
+                "message": "Could not extract enough content from this article.",
+                "can_embed": False,
+            }
+        )
 
-    # 2. chunk
+    # chunk + embed + store
     chunks = chunk_text(full_text)
-
-    # 3. embed each chunk + store
     for i, chunk in enumerate(chunks):
         embedding = get_embedding(chunk)
         db_chunk = ArticleChunk(
@@ -66,7 +75,6 @@ async def embed_article(
         )
         db.add(db_chunk)
 
-    # 4. create chat session
     session = ChatSession(
         article_url=data.article_url,
         article_title=title,
@@ -80,7 +88,8 @@ async def embed_article(
         session_id=session.id,
         article_title=title,
         chunks_stored=len(chunks),
-        message="Article ready! You can now ask questions."
+        message="Article ready! You can now ask questions.",
+        can_embed=True,
     )
 
 

@@ -95,13 +95,31 @@ def _call_openai(system_prompt: str, user_message: str) -> str:
 # ── Article scraping ──────────────────────────────────────
 
 def scrape_article(url: str) -> tuple[str, str]:
-    """Fetch and extract clean text + title from article URL."""
+    """Fetch and extract clean text. Raises exception if paywall detected."""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         response = httpx.get(url, headers=headers, timeout=15.0, follow_redirects=True)
+        
+        # paywall detection — login redirect or very short content
+        if response.status_code in [401, 403, 429]:
+            raise Exception("paywall_detected")
+        
         soup = BeautifulSoup(response.text, "html.parser")
-
         title = soup.title.string if soup.title else "News Article"
+
+        # detect login walls — common patterns
+        page_text = soup.get_text().lower()
+        paywall_signals = [
+            "subscribe to read",
+            "sign in to read",
+            "login to continue",
+            "subscribe now to",
+            "create a free account",
+            "you've used all your free articles",
+            "please log in",
+        ]
+        if any(signal in page_text for signal in paywall_signals):
+            raise Exception("paywall_detected")
 
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
@@ -112,7 +130,7 @@ def scrape_article(url: str) -> tuple[str, str]:
         return title.strip(), text.strip()
 
     except Exception as e:
-        raise Exception(f"Could not scrape article: {str(e)}")
+        raise Exception(f"scrape_failed: {str(e)}")
 
 
 def chunk_text(text: str, chunk_size: int = 500) -> List[str]:

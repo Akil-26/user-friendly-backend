@@ -39,6 +39,7 @@ class EmbedResponse(BaseModel):
     article_title: str
     chunks_stored: int
     message: str
+    can_embed: bool = True
 
 class AskRequest(BaseModel):
     article_url: str
