@@ -1,19 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
-from dotenv import load_dotenv
-from datetime import datetime, timedelta
-import bcrypt
-import jwt
-import os
-
-from ..database import get_db
-from ..models import User
+from ..models import User, ArticleChunk, ChatSession
 from ..schemas import (
     RegisterRequest, LoginRequest,
     TokenResponse, UserResponse, InterestsUpdate
 )
 from ..dependencies import get_current_user
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+from dotenv import load_dotenv
+from ..database import get_db
+import bcrypt
+import jwt
+import os
 
 load_dotenv()
 
@@ -102,6 +101,7 @@ def update_interests(
     db.refresh(current_user)
     return current_user
 
+
 @router.put("/me/password")
 def change_password(
     data: dict,
@@ -118,12 +118,27 @@ def change_password(
 
 @router.delete("/me")
 def delete_account(
-    data: dict,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    password: str = Body(..., embed=True),
 ):
-    if not verify_password(data["password"], current_user.password):
-        raise HTTPException(status_code=400, detail="Incorrect password")
+    # verify password
+    if not verify_password(password, current_user.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Incorrect password"
+        )
+
+    # delete related data first
+    db.query(ArticleChunk).filter(
+        ArticleChunk.user_id == current_user.id
+    ).delete()
+    db.query(ChatSession).filter(
+        ChatSession.user_id == current_user.id
+    ).delete()
+
+    # delete user
     db.delete(current_user)
     db.commit()
-    return {"message": "Account deleted"}
+
+    return {"message": "Account deleted successfully"}
